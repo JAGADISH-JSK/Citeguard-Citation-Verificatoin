@@ -2,10 +2,29 @@
 
 > **AI-Powered Citation Verification & Evidence Analysis for Research Papers**
 
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat&logo=fastapi&logoColor=white)
+![HuggingFace](https://img.shields.io/badge/HuggingFace-Transformers-FFD21E?style=flat&logo=huggingface&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-6366f1?style=flat)
+![Status](https://img.shields.io/badge/Status-Active-22c55e?style=flat)
+
 CiteGuard automatically checks every citation in a research paper to verify:
 1. **Existence** – does the cited paper actually exist?
 2. **Alignment** – does it actually support the claim being made?
 3. **Verdict** – Supports / Neutral / Contradicts / No Evidence
+
+---
+
+## Screenshots
+
+### 🏠 Dashboard
+![CiteGuard Dashboard](docs/screenshots/CiteGuard_Dashboard.png)
+
+### 📤 Upload Document
+![CiteGuard Upload](docs/screenshots/CiteGuard_Upload.png)
+
+### 📊 Citation Analysis Results
+![CiteGuard Results](docs/screenshots/CiteGuard_Results.png)
 
 ---
 
@@ -107,6 +126,8 @@ citeguard/
 │   ├── index.html           # Dashboard UI
 │   ├── style.css            # Styles
 │   └── app.js               # Frontend logic
+├── docs/
+│   └── screenshots/         # Project screenshots
 ├── input/                   # Drop your PDFs here
 ├── output/                  # Reports written here
 ├── cache/                   # API response cache (JSON)
