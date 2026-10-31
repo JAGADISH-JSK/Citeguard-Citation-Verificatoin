@@ -1,0 +1,36 @@
+# ── Document Processing ──────────────────────────────────────────
+pdfplumber==0.11.10
+pymupdf==1.28.2
+requests==2.32.3
+
+# ── NLP Core ─────────────────────────────────────────────────────
+# NOTE: spacy removed — requires Cython compilation, not compatible with Python 3.14
+#       Sentence splitting is handled via regex in our modules.
+transformers==5.22.1
+torch==2.15.0
+sentence-transformers==6.2.0
+
+# ── NLI / Verification ───────────────────────────────────────────
+# DeBERTa-Large-MNLI loaded via transformers (no extra pip install)
+
+# ── Vector Store ─────────────────────────────────────────────────
+chromadb==1.5.9           # lightweight local vector DB (Milvus-compatible swap)
+
+# ── APIs ─────────────────────────────────────────────────────────
+httpx==0.27.2             # async HTTP for Semantic Scholar / CrossRef
+
+# ── Utilities ────────────────────────────────────────────────────
+python-dotenv==1.0.1
+tqdm==4.66.5
+loguru==0.7.2
+pydantic==2.14.2
+# numpy — do NOT pin; already installed as a torch dependency (numpy 2.5.4+)
+
+# ── Report Generation ────────────────────────────────────────────
+jinja2==3.1.4
+
+# ── Web Interface (optional) ─────────────────────────────────────
+# Install separately with: pip install -r requirements-web.txt --no-deps
+fastapi==0.115.0
+uvicorn==0.30.6
+python-multipart==0.0.12

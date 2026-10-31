@@ -1,0 +1,4 @@
+# Optional web UI dependencies
+# Install with: pip install -r requirements-web.txt --no-deps
+# (Pillow conflict with pdfplumber is bypassed because Pillow>=12 is already installed)
+streamlit==1.40.2
