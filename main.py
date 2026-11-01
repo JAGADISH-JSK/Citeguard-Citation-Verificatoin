@@ -20,12 +20,13 @@ import config  # noqa – ensures .env is loaded before any module import
 from modules.extractor       import extract, ExtractedDocument
 from modules.citation_parser import parse, CitationMap
 from modules.claim_extractor import extract_claims, ClaimCitationPair
-from modules.resolver        import resolve_all_sync, ResolvedCitation
+from modules.resolver        import resolve_all_sync, enrich_full_text_sync, ResolvedCitation
 from modules.aligner         import retrieve_evidence
 from modules.verifier        import verify, Verdict
 from modules.reporter        import (
     CitationRecord, build_report, save_report,
 )
+from modules.rag_store       import store_stats
 
 # ── Logger setup ──────────────────────────────────────────────────────────────
 
@@ -65,8 +66,19 @@ def run(pdf_path: str) -> dict:
     logger.info("━━ Layer 3: Metadata Resolution (API calls…)")
     resolved: dict[str, ResolvedCitation] = resolve_all_sync(citation_map.references)
 
+    # ── Layer 3b: Full-text enrichment (RAG upgrade) ───────────────
+    logger.info("━━ Layer 3b: Full-text Enrichment (arXiv / open-access PDF)")
+    enrich_full_text_sync(resolved)
+    full_text_count = sum(1 for r in resolved.values() if r.full_text)
+    logger.info(f"   {full_text_count}/{len(resolved)} papers enriched with full text")
+
+    # ── RAG store status ───────────────────────────────────────────
+    stats = store_stats()
+    if stats["available"]:
+        logger.info(f"   RAG store: {stats['total_passages']} passages indexed")
+
     # ── Layers 4-6: Retrieve evidence + verify ─────────────────────
-    logger.info("━━ Layers 4-6: Evidence Retrieval + NLI Verification")
+    logger.info("━━ Layers 4-6: Evidence Retrieval + NLI Verification (RAG)")
     records: list[CitationRecord] = []
 
     # Deduplicate: one record per (citation_key) — use first claim seen
@@ -83,10 +95,14 @@ def run(pdf_path: str) -> dict:
             logger.debug(f"  [{key}] no resolver result, skipping evidence check")
             continue
 
-        paper_text = res.abstract or ""
+        # RAG upgrade: prefer full_text (full paper body) over abstract
+        paper_text = res.full_text or res.abstract or ""
 
-        # Retrieve evidence passages
-        passages = retrieve_evidence(pair.claim, paper_text) if paper_text else []
+        # Stable paper ID for the vector store — prefer DOI, else title hash
+        paper_id = res.doi or res.arxiv_id or key
+
+        # Retrieve evidence passages via RAG store
+        passages = retrieve_evidence(pair.claim, paper_text, paper_id=paper_id) if paper_text else []
 
         # Run NLI verification
         vr = verify(pair.claim, passages)

@@ -1,7 +1,8 @@
 # ── Document Processing ──────────────────────────────────────────
 pdfplumber==0.11.10
 pymupdf==1.28.2
-requests==2.32.3
+# requests: google-adk requires >=2.32.4; use a lower bound to stay compatible
+requests>=2.32.4
 
 # ── NLP Core ─────────────────────────────────────────────────────
 # NOTE: spacy removed — requires Cython compilation, not compatible with Python 3.14
@@ -10,14 +11,22 @@ transformers==5.22.1
 torch==2.15.0
 sentence-transformers==6.2.0
 
-# ── NLI / Verification ───────────────────────────────────────────
+# ── NLI / Verification ───────────────────────────────────────────PS C:\Users\Jagadish\Downloads\5th_sem\nlp\New folder\citeguard> streamlit run streamlit_app.py
+streamlit : The term 'streamlit' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ streamlit run streamlit_app.py
++ ~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (streamlit:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
 # DeBERTa-Large-MNLI loaded via transformers (no extra pip install)
 
 # ── Vector Store ─────────────────────────────────────────────────
 chromadb==1.5.9           # lightweight local vector DB (Milvus-compatible swap)
 
 # ── APIs ─────────────────────────────────────────────────────────
-httpx==0.27.2             # async HTTP for Semantic Scholar / CrossRef
+# httpx: google-genai requires >=0.28.1; use a lower bound to stay compatible
+httpx>=0.28.1,<1          # async HTTP for Semantic Scholar / CrossRef
 
 # ── Utilities ────────────────────────────────────────────────────
 python-dotenv==1.0.1
@@ -29,8 +38,11 @@ pydantic==2.14.2
 # ── Report Generation ────────────────────────────────────────────
 jinja2==3.1.4
 
-# ── Web Interface (optional) ─────────────────────────────────────
-# Install separately with: pip install -r requirements-web.txt --no-deps
-fastapi==0.115.0
-uvicorn==0.30.6
-python-multipart==0.0.12
+# ── Web Interface ────────────────────────────────────────────────
+# fastapi>=0.133 satisfies google-adk (>=0.133) and removes the starlette
+# conflict (starlette>=0.39 is pulled in automatically by fastapi>=0.133).
+# uvicorn>=0.34 satisfies google-adk (>=0.34).
+fastapi>=0.133.0,<1
+uvicorn>=0.34.0,<1
+python-multipart>=0.0.12
+

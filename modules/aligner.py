@@ -1,11 +1,16 @@
 """
-Layer 4 + 5 – Evidence Retrieval & Re-ranking
-=============================================
-Uses transformers AutoTokenizer/AutoModel directly (avoids sklearn dependency)
-for bi-encoder encoding, and a cross-encoder via transformers pipeline.
+Layer 4 + 5 – Evidence Retrieval & Re-ranking  (RAG-upgraded)
+==============================================================
+Full RAG pipeline:
 
-Bi-encoder   : mean-pooled embeddings → cosine similarity (pure numpy)
-Cross-encoder: transformers zero-shot or NLI pipeline for re-ranking
+  INDEXING  → chunk paper text → embed → store in ChromaDB (rag_store)
+  RETRIEVAL → embed claim → ANN query ChromaDB → top-K candidates
+  RE-RANK   → cross-encoder scores each (claim, passage) pair → top-K_rerank
+
+Persistent vector store means each paper is embedded ONCE; subsequent runs
+query the store directly — no re-embedding needed.
+
+Falls back gracefully to in-memory cosine if ChromaDB is unavailable.
 """
 
 from __future__ import annotations
@@ -38,7 +43,6 @@ class EvidencePassage:
 def _get_tokenizer_model():
     """Load tokenizer + model for mean-pooled bi-encoder embeddings."""
     from transformers import AutoTokenizer, AutoModel
-    import torch
     logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL)
     model     = AutoModel.from_pretrained(EMBEDDING_MODEL)
@@ -50,7 +54,6 @@ def _get_tokenizer_model():
 def _get_cross_encoder_pipeline():
     """Load a cross-encoder via transformers text-classification pipeline."""
     from transformers import pipeline
-    # Use a lightweight cross-encoder that works without sklearn
     model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     logger.info(f"Loading cross-encoder: {model_name}")
     try:
@@ -63,9 +66,21 @@ def _get_cross_encoder_pipeline():
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def retrieve_evidence(claim: str, paper_text: str) -> List[EvidencePassage]:
+def retrieve_evidence(
+    claim: str,
+    paper_text: str,
+    paper_id: str = "",
+) -> List[EvidencePassage]:
     """
-    Full two-stage retrieval for a single claim against a paper's text.
+    Full RAG two-stage retrieval for a single claim against a paper's text.
+
+    Parameters
+    ----------
+    claim      : The sentence making a claim (the query).
+    paper_text : Full paper body (or abstract if full text unavailable).
+    paper_id   : Stable identifier used as ChromaDB document key.
+                 If empty, falls back to in-memory retrieval.
+
     Returns passages ranked from most to least relevant.
     """
     if not paper_text.strip():
@@ -75,12 +90,15 @@ def retrieve_evidence(claim: str, paper_text: str) -> List[EvidencePassage]:
     if not passages:
         return []
 
-    # Stage 1: Bi-encoder retrieval (pure numpy, no sklearn)
-    top_passages = _bi_encode_retrieve(claim, passages)
+    # ── Stage 1: Bi-encoder retrieval ─────────────────────────────────────────
+    # Try RAG store first (persistent ChromaDB); fall back to in-memory cosine.
+    if paper_id:
+        top_passages = _rag_retrieve(claim, passages, paper_id)
+    else:
+        top_passages = _bi_encode_retrieve(claim, passages)
 
-    # Stage 2: Cross-encoder re-ranking
+    # ── Stage 2: Cross-encoder re-ranking ─────────────────────────────────────
     ranked = _cross_encode_rerank(claim, top_passages)
-
     return ranked
 
 
@@ -117,7 +135,7 @@ def _mean_pool(token_embeddings: "np.ndarray", attention_mask: "np.ndarray") -> 
 
 
 def _encode_texts(texts: List[str]) -> "np.ndarray":
-    """Encode a list of texts → normalised embeddings (N, D)."""
+    """Encode a list of texts → L2-normalised embeddings (N, D)."""
     import torch
     tokenizer, model = _get_tokenizer_model()
 
@@ -136,7 +154,6 @@ def _encode_texts(texts: List[str]) -> "np.ndarray":
         with torch.no_grad():
             output = model(**encoded)
 
-        # Mean-pool over token dim
         token_embs  = output.last_hidden_state.numpy()
         attn_mask   = encoded["attention_mask"].numpy()
         embeddings  = _mean_pool(token_embs, attn_mask)
@@ -148,6 +165,49 @@ def _encode_texts(texts: List[str]) -> "np.ndarray":
 
     return np.vstack(all_embeddings)
 
+
+# ── RAG store retrieval (ChromaDB) ────────────────────────────────────────────
+
+def _rag_retrieve(
+    claim: str,
+    passages: List[str],
+    paper_id: str,
+) -> List[Tuple[str, float]]:
+    """
+    Index paper chunks into ChromaDB on first call; query on subsequent calls.
+    Returns top-K (passage_text, score) pairs.
+    """
+    from modules.rag_store import paper_indexed, index_paper, query as rag_query
+
+    # Index once —————————————————————————————————————————————————————————————
+    if not paper_indexed(paper_id):
+        logger.debug(f"  [{paper_id}] indexing {len(passages)} chunks into RAG store…")
+        try:
+            all_texts  = passages
+            embeddings = _encode_texts(all_texts)
+            indexed = index_paper(paper_id, passages, embeddings)
+            if indexed == 0 and not paper_indexed(paper_id):
+                # ChromaDB failed silently; fall back to in-memory
+                return _bi_encode_retrieve(claim, passages)
+        except Exception as exc:
+            logger.warning(f"RAG index error for [{paper_id}]: {exc}")
+            return _bi_encode_retrieve(claim, passages)
+
+    # Query ———————————————————————————————————————————————————————————————————
+    try:
+        claim_emb = _encode_texts([claim])[0]
+        results   = rag_query(paper_id, claim_emb, top_k=TOP_K_RETRIEVAL)
+        if results:
+            logger.debug(f"  [{paper_id}] RAG store returned {len(results)} candidates")
+            return results
+    except Exception as exc:
+        logger.warning(f"RAG query error for [{paper_id}]: {exc}")
+
+    # Fallback to in-memory if store query returned nothing
+    return _bi_encode_retrieve(claim, passages)
+
+
+# ── In-memory bi-encoder fallback ─────────────────────────────────────────────
 
 def _bi_encode_retrieve(
     claim: str, passages: List[str]

@@ -199,7 +199,7 @@ def _run_pipeline(job_id: str, pdf_path: str) -> None:
         from modules.extractor       import extract
         from modules.citation_parser import parse
         from modules.claim_extractor import extract_claims
-        from modules.resolver        import resolve_all_sync
+        from modules.resolver        import resolve_all_sync, enrich_full_text_sync
         from modules.aligner         import retrieve_evidence
         from modules.verifier        import verify as nli_verify
         from modules.reporter        import CitationRecord, build_report, save_report
@@ -221,6 +221,9 @@ def _run_pipeline(job_id: str, pdf_path: str) -> None:
         _set_stage(3)
         resolved = resolve_all_sync(citation_map.references)
 
+        # Layer 3b: RAG full-text enrichment
+        enrich_full_text_sync(resolved)
+
         # Layers 4-6
         _set_stage(4)
         records = []
@@ -241,8 +244,9 @@ def _run_pipeline(job_id: str, pdf_path: str) -> None:
             if res is None:
                 continue
 
-            paper_text = res.abstract or ""
-            passages   = retrieve_evidence(pair.claim, paper_text) if paper_text else []
+            paper_text = res.full_text or res.abstract or ""
+            paper_id   = res.doi or res.arxiv_id or key
+            passages   = retrieve_evidence(pair.claim, paper_text, paper_id=paper_id) if paper_text else []
             vr         = nli_verify(pair.claim, passages)
 
             ref = citation_map.references.get(key)

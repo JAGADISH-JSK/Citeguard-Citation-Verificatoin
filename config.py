@@ -34,6 +34,14 @@ TOP_K_RETRIEVAL  = int(os.getenv("TOP_K_RETRIEVAL", 50))   # bi-encoder candidat
 TOP_K_RERANK     = int(os.getenv("TOP_K_RERANK", 10))      # after cross-encoder
 NLI_THRESHOLD    = float(os.getenv("NLI_THRESHOLD", 0.5))  # min entailment score
 
+# ── RAG settings ──────────────────────────────────────────────────
+# Set RAG_FULL_TEXT=false to skip full-text fetching (abstract-only mode)
+RAG_FULL_TEXT    = os.getenv("RAG_FULL_TEXT", "true").lower() == "true"
+# ar5iv.org mirror for arXiv HTML full text (no auth required)
+AR5IV_BASE_URL   = os.getenv("AR5IV_BASE_URL", "https://ar5iv.org/html")
+# Max full-text characters fed into the chunker per paper (safeguard)
+RAG_MAX_CHARS    = int(os.getenv("RAG_MAX_CHARS", 120_000))
+
 # ── External APIs ─────────────────────────────────────────────────
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
 CROSSREF_API         = "https://api.crossref.org/works"
